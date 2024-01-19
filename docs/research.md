@@ -38,10 +38,17 @@ macro_rules! $name {
 其中至少有一条规则，最后一条规则后的分号可以省略。
 
 使用上下文无关文法的描述如下：
+
 $$
-MacroRulesDefinition \to {\rm {'macro\_rules'}} \ {\rm !} \ {\rm IDENTIFIER}\  \{ MacroRules \} \\
-MacroRules \to MacroRule \ (; \ MacroRule)^* \ ;^? \\
-MacroRule \to MacroMatcher \ {\rm {'\Rarr'}} \ MacroTranscriber
+MacroRulesDefinition \to {\rm {'macro \textunderscore rules'}} \ {\rm !} \ {\rm IDENTIFIER}\  \{ MacroRules \}
+$$
+
+$$
+MacroRules \to MacroRule \ (; \ MacroRule)^* \ ;^?
+$$
+
+$$
+MacroRule \to MacroMatcher \ {\rm {'\Rightarrow'}} \ MacroTranscriber
 $$
 
 ### 规则的定义
