@@ -2,7 +2,7 @@
 
 陈骆鑫（组长） 舒英特（组员） 李璐豪（组员）
 
-[link](https://github.com/GreenDay03/2023fall-CS-teamworks)
+[报告链接](https://github.com/GreenDay03/2023fall-CS-teamworks/blob/main/docs/report.md)
 
 #### 摘要:
 

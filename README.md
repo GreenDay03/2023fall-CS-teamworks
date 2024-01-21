@@ -8,3 +8,5 @@ For example, if team 0 decides to work on a project named Bla Bla, then they sho
 
 **Please refer to**
 - [2017fall-student-teamworks](https://github.com/ustc-compiler/2017fall-student-teamworks)
+
+[报告链接](https://github.com/GreenDay03/2023fall-CS-teamworks/blob/main/docs/report.md)

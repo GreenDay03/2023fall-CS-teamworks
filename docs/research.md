@@ -40,7 +40,7 @@ macro_rules! $name {
 使用上下文无关文法的描述如下：
 
 $$
-MacroRulesDefinition \to {\rm {'macro \textunderscore rules'}} \ {\rm !} \ {\rm IDENTIFIER}\  \{ MacroRules \}
+MacroRulesDefinition \to {\rm {'macro \_ rules'}} \ {\rm !} \ {\rm IDENTIFIER}\  \{ MacroRules \}
 $$
 
 $$
@@ -213,9 +213,7 @@ fn main() {
 
 ## 过程宏
 
-过程宏采用一种类似正规式的方式匹配输入，并按照捕获和一定的对应规则简单地转换为输出。
-
-而过程宏的功能要更加强大，思路也更加简单：它允许对 TokenTree（代码中的 TokenStream 类型） 进行任意变换。以函数式过程宏为例，它的定义方式如下：
+声明宏采用一种类似正规式的方式匹配输入，并按照捕获和一定的对应规则简单地转换为输出。而过程宏的功能要更加强大，思路也更加简单：它允许对 TokenTree（代码中的 TokenStream 类型） 进行任意变换。以函数式过程宏为例，它的定义方式如下：
 
 ``` rust
 #[proc_macro]
@@ -369,7 +367,7 @@ RustScan是一个由Rust编写的端口扫描程序，目前在Github上有超�
 
 RustPython是一个用Rust编写的Python3解释器，目前在Github上有超过1万颗星。该项目使用了大量的宏，其中包括：
 
-- 过程宏10处，主要包含`pyclass`等属性宏，`py_compile`等过程宏以及`PyStructSequence`等继承宏。这些过程宏的内容主要是对`derive_impl`模块中同名函数的封装，主要用于实现一些Python的内置类型的方法。
+- 过程宏10处，主要包含`pyclass`等属性宏，`py_compile`等函数宏以及`PyStructSequence`等继承宏。这些过程宏的内容主要是对`derive_impl`模块中同名函数的封装，主要用于实现一些Python的内置类型的方法。
 
 ```rust
 #[pyattr]
