@@ -210,3 +210,111 @@ fn main() {
 ```
 
 （其中 `$$` 是一些细节问题造成的转义，与 `$` 等同。）可以看到，在调用 `io_prelude!` 宏之后，`scanner` 变量始终存在并且可以通过 `input!` 宏继续使用，但由于它在不同的上下文，无法直接通过变量名访问它，这起到了封装的作用。
+
+## Rust 宏在实际项目中的使用分析
+
+本文选取多个流行的Rust仓库，分析其中Rust宏使用的模式和频率。
+
+#### [Tokio](https://github.com/tokio-rs/tokio.git)
+
+Tokio是一个可靠、轻量的异步编程库，提供事件驱动的非阻塞IO接口，广泛用于实现网络服务，目前在Github拥有超过2万颗星。
+
+**过程宏**
+
+项目中出现属性式过程宏6次，函数式过程宏2次，均封装在单独的crate tokio-macros中。过程宏虽然数量较少，但是对项目起到了很重要的作用。例如，
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> { ... }
+```
+
+实际上是经过了`tokio::main`过程宏的处理，从而对main函数用户实现改写，完成一些初始化工作，实现异步编程的功能。
+
+```rust
+#[proc_macro_attribute]
+#[cfg(not(test))] // Work around for rust-lang/rust#62127
+pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
+    entry::main(args.into(), item.into(), true).into()
+}
+```
+
+除此之外，`tokio::test`等过程宏完成类似的处理，对测试用例的代码做出一定的转换。
+
+**声明宏**
+
+该仓库中用`macro_rules!`新定义的宏多达170处，我们将其分成若干类别：
+
+- 部分宏接受空字符串作为匹配模板，输出若干函数的实现。例如：
+
+```rust
+macro_rules! deref_async_buf_read {
+    () => {
+        fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<&[u8]>> {
+            Pin::new(&mut **self.get_mut()).poll_fill_buf(cx)
+        }
+
+        fn consume(mut self: Pin<&mut Self>, amt: usize) {
+            Pin::new(&mut **self).consume(amt)
+        }
+    };
+}
+```
+
+该宏规定了两个函数的实现，其应用场景仅有两处而且未向外界公开，主要目的是为特定的泛型实现`AsyncBufRead`的特性。此类宏的作用可以简单的理解为节省重复代码的技巧，有利于提升代码质量。
+
+- 部分宏用于批量化的添加项目的属性，例如文档可见性、编译特性(feature)等等，这类宏的目的与第1类相同，例如`cfg_block_on`为项目添加了编译开关属性：
+
+```rust
+macro_rules! cfg_block_on {
+    ($($item:item)*) => {
+        $(
+            #[cfg(any(
+                    feature = "fs",
+                    feature = "net",
+                    feature = "io-std",
+                    feature = "rt",
+                    ))]
+            $item
+        )*
+    }
+}
+```
+
+- 部分宏承担了一些简单的断言，比较等功能，例如`async_assert_fn_send`，`assert_value`等等，用于测试的框架。这些宏的功能与C语言部分测试框架的功能相同，不再赘述。- 
+- 极少数宏可以接受复杂的标记树（token trees，tt），对标记进行复杂的展开，生成新的代码，作为tokio库中重要的功能。例如`join`宏和`select`等。这些宏实现了异步框架的核心功能，体现出Rust语言有强大的元编程能力。以`select`宏为例，该宏允许在多个异步计算中等待，并在单个计算完成后返回。`select`可以接受较复杂的模式`(biased; $p:pat = $($t:tt)* )`和`( $p:pat = $($t:tt)* )`，这些模式被嵌入较复杂的逻辑中，实现select选择的功能。以后者为例，在下列代码中，后一个模式匹配了两个分支，当这两个分支被select的逻辑运行，选中。
+
+```rust
+    tokio::select! {
+        val = rx1 => {
+            println!("rx1 completed first with {:?}", val);
+        }
+        val = rx2 => {
+            println!("rx2 completed first with {:?}", val);
+        }
+    }
+```
+
+#### [RustScan](https://github.com/RustScan/RustScan.git)
+
+RustScan是一个由Rust编写的端口扫描程序，目前在Github上有超过1万颗星。该项目使用Rust宏较少，仅定义6个声明宏，主要是输出一些调试信息或者省略一些字段的填写，总体上来说作用不大。
+
+#### [RustPython](https://github.com/RustPython/RustPython.git)
+
+RustPython是一个用Rust编写的Python3解释器，目前在Github上有超过1万颗星。该项目使用了大量的宏，其中包括：
+
+- 过程宏10处，主要包含`pyclass`等属性宏，`py_compile`等过程宏以及`PyStructSequence`等继承宏。这些过程宏的内容主要是对`derive_impl`模块中同名函数的封装，主要用于实现一些Python的内置类型的方法。
+
+```rust
+#[pyattr]
+#[pyattr(name = "ArrayType")]
+#[pyclass(name = "array")]
+#[derive(Debug, PyPayload)]
+pub struct PyArray {
+    array: PyRwLock<ArrayContentType>,
+    exports: AtomicUsize,
+}
+```
+
+- 声明宏108处，主要可以分为2类：输出函数的实现，例如`impl_from`为符合条件的类批量化添加`from`属性；实现简短功能，例如`ascii`将字面量转化为ascii形式。不同于tokio库，RustPython没有使用声明宏批量化添加项目的属性，也没有使用规模较大、功能较复杂的声明宏。
+
+总的来说，Rust宏发挥着重要的作用。过程宏助力简化复杂逻辑，如用于异步编程框架中的编译时代码生成，减少手动编写重复性工作。声明宏则常被应用于精简代码、统一属性设置和自动化类型定义，提升一致性与维护性。无论是简化特定语法构造还是构建语言扩展，宏都能有效增强代码灵活性和开发效率，广泛应用在各类项目中。
