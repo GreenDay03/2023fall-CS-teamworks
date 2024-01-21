@@ -186,3 +186,27 @@ fn main() {
 ```
 
 看起来这段程序完全正确，但两个 `b` 的上下文是不同的，因此 `println!` 不能找到需要的 `b`，报错 *cannot find value `a` in this scope*。而 `a` 被元变量捕获，因此是同一个上下文，可以正常使用。基于这样的机制，我们就可以通过传入变量名的方式，让宏只暴露之后需要使用的变量。
+
+我们举一个实际应用中的例子。我们需要以流式处理输入，现已存在 `Scanner` 类，使用它的 `next` 方法（泛型）即可从标准输入流中读取一个值。若我们的需求是连续读取多个变量，就需要对每个变量写一遍 `let a = scanner.next::<T>();`。我们需要使用宏来去除重复代码，并且由于 `scanner` 仅有这一个用途，我们不希望它被暴露出来。代码的一部分如下：
+
+```rust
+macro_rules! io_prelude {
+    () => {
+        let mut scanner = Scanner::new();
+        macro_rules! input {
+            ($$($ident:ident : $type:tt),+ ) => {
+                $$(let $ident = scanner.next::<$type>();)+
+            };
+        }
+    }
+}
+
+fn main() {
+    io_prelude!();
+    input!{ a: usize, b: i32 }
+    // let c = scanner.next::<i64>(); ERROR!
+    println!("{a} {b}");
+}
+```
+
+（其中 `$$` 是一些细节问题造成的转义，与 `$` 等同。）可以看到，在调用 `io_prelude!` 宏之后，`scanner` 变量始终存在并且可以通过 `input!` 宏继续使用，但由于它在不同的上下文，无法直接通过变量名访问它，这起到了封装的作用。
