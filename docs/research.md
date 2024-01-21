@@ -211,15 +211,23 @@ fn main() {
 
 （其中 `$$` 是一些细节问题造成的转义，与 `$` 等同。）可以看到，在调用 `io_prelude!` 宏之后，`scanner` 变量始终存在并且可以通过 `input!` 宏继续使用，但由于它在不同的上下文，无法直接通过变量名访问它，这起到了封装的作用。
 
-## 过程宏 Procedural Macros
+## 过程宏
 
-这是Rust语言的一种特性，允许用户能够拓展Rust编译器
+过程宏采用一种类似正规式的方式匹配输入，并按照捕获和一定的对应规则简单地转换为输出。
 
-相比于声明式宏的直接Token替换，过程式的宏则是将代码进行一种“再加工”，它的作用对象是代码块的TokenStream.
+而过程宏的功能要更加强大，思路也更加简单：它允许对 TokenTree（代码中的 TokenStream 类型） 进行任意变换。以函数式过程宏为例，它的定义方式如下：
 
-TokenStream 是一个词法结构，是不包含语义的,结构有些像我们课上所学的AST结果
+``` rust
+#[proc_macro]
+pub fn foo(input: TokenStream) -> TokenStream {
+    some_transform(input)
+}
+foo!(SELECT * FROM posts);
+```
 
-对于下面的过程宏和调用
+之后直接以类似函数调用的方式使用即可。
+
+过程宏的解析流程与声明宏基本一致，只是变换 TokenTree 的方式不同。例如，对于下面的属性过程宏和调用：
 
 ```rust
 use proc_macro::TokenStream;
@@ -238,14 +246,11 @@ use proc_macro_define::define;
 #[define(log)]
 fn foo() {
     b268tqwrsgfohi;
-  println!("Hello, world!");
+  	println!("Hello, world!");
 }
-
 ```
 
-执行 ```cargo check ``` 结果如下，可以看出输入进去的流就是对我们使用过程宏的代码块的一种词法分析，在其中加入了```b268tqwrsgfohi ```这样的错误片段，仍然会生成这样的数据
-
-<img src=a.png style="zoom: 67%;" />
+其中包含一个不存在的变量 `b268tqwrsgfohi`。执行 `cargo check `，可以看到 `attr` 和 `item` 的结构被正常输出，之后才报出变量不存在的错误。
 
 ``` rust
 attr: TokenStream [
@@ -259,60 +264,9 @@ item: TokenStream [
         ident: "fn",
         span: #0 bytes(47..49),
     },
-    Ident {
-        ident: "foo",
-        span: #0 bytes(50..53),
-    },
-    Group {
-        delimiter: Parenthesis,
-        stream: TokenStream [],
-        span: #0 bytes(53..55),
-    },
-    Group {
-        delimiter: Brace,
-        stream: TokenStream [
-            Ident {
-                ident: "b268tqwrsgfohi",
-                span: #0 bytes(62..76),
-            },
-            Punct {
-                ch: ';',
-                spacing: Alone,
-                span: #0 bytes(76..77),
-            },
-            Ident {
-                ident: "println",
-                span: #0 bytes(82..89),
-            },
-            Punct {
-                ch: '!',
-                spacing: Alone,
-                span: #0 bytes(89..90),
-            },
-            Group {
-                delimiter: Parenthesis,
-                stream: TokenStream [
-                    Literal {
-                        kind: Str,
-                        symbol: "Hello, world!",
-                        suffix: None,
-                        span: #0 bytes(91..106),
-                    },
-                ],
-                span: #0 bytes(90..107),
-            },
-            Punct {
-                ch: ';',
-                spacing: Alone,
-                span: #0 bytes(107..108),
-            },
-        ],
-        span: #0 bytes(56..110),
-    },
+    // clip
 ]
 ```
-
-值得注意的是，输出上述结果后，还会输出
 
 ```rust
 error[E0425]: cannot find value `b268tqwrsgfohi` in this scope
@@ -322,19 +276,7 @@ error[E0425]: cannot find value `b268tqwrsgfohi` in this scope
   |     ^^^^^^^^^^^^^^ not found in this scope
 ```
 
-的错误信息，因为这段文字是明显的错误，应当是在语法分析的时候检查出来的，而如果在句子结尾处删去```;```,则会在最开始的时候出现这样的错误，
-
-```
-error: expected `;`, found `println`
- --> src/main.rs:5:19
-  |
-5 |     b268tqwrsgfohi
-  |                   ^ help: add `;` here
-6 |     println!("Hello, world!");
-  |     ------- unexpected token
-```
-
-因此，我们可以知道，过程宏是在语法分析的时候被处理的，此时，过程宏会获取调用代码的AST,并进行相应的处理
+这符合我们介绍的流程。第一遍 AST 生成时，过程宏的调用仅以 TokenTree 结构存在于 AST 叶节点中，不包含语法信息，也不做语义检查；直到展开该叶节点，完成变换并进行进一步解析时，才会发现变量不存在的错误。
 
 ## Rust 宏在实际项目中的使用分析
 
