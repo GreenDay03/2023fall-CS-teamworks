@@ -211,6 +211,131 @@ fn main() {
 
 （其中 `$$` 是一些细节问题造成的转义，与 `$` 等同。）可以看到，在调用 `io_prelude!` 宏之后，`scanner` 变量始终存在并且可以通过 `input!` 宏继续使用，但由于它在不同的上下文，无法直接通过变量名访问它，这起到了封装的作用。
 
+## 过程宏 Procedural Macros
+
+这是Rust语言的一种特性，允许用户能够拓展Rust编译器
+
+相比于声明式宏的直接Token替换，过程式的宏则是将代码进行一种“再加工”，它的作用对象是代码块的TokenStream.
+
+TokenStream 是一个词法结构，是不包含语义的,结构有些像我们课上所学的AST结果
+
+对于下面的过程宏和调用
+
+```rust
+use proc_macro::TokenStream;
+
+#[proc_macro_attribute]
+pub fn define(attr: TokenStream, item: TokenStream) -> TokenStream {
+    eprintln!("attr: {}", attr);
+    eprintln!("item: {}", item);
+    item
+}
+```
+
+```rust
+use proc_macro_define::define;
+
+#[define(log)]
+fn foo() {
+    b268tqwrsgfohi;
+  println!("Hello, world!");
+}
+
+```
+
+执行 ```cargo check ``` 结果如下，可以看出输入进去的流就是对我们使用过程宏的代码块的一种词法分析，在其中加入了```b268tqwrsgfohi ```这样的错误片段，仍然会生成这样的数据
+
+<img src=a.png style="zoom: 67%;" />
+
+``` rust
+attr: TokenStream [
+    Ident {
+        ident: "log",
+        span: #0 bytes(41..44),
+    },
+]
+item: TokenStream [
+    Ident {
+        ident: "fn",
+        span: #0 bytes(47..49),
+    },
+    Ident {
+        ident: "foo",
+        span: #0 bytes(50..53),
+    },
+    Group {
+        delimiter: Parenthesis,
+        stream: TokenStream [],
+        span: #0 bytes(53..55),
+    },
+    Group {
+        delimiter: Brace,
+        stream: TokenStream [
+            Ident {
+                ident: "b268tqwrsgfohi",
+                span: #0 bytes(62..76),
+            },
+            Punct {
+                ch: ';',
+                spacing: Alone,
+                span: #0 bytes(76..77),
+            },
+            Ident {
+                ident: "println",
+                span: #0 bytes(82..89),
+            },
+            Punct {
+                ch: '!',
+                spacing: Alone,
+                span: #0 bytes(89..90),
+            },
+            Group {
+                delimiter: Parenthesis,
+                stream: TokenStream [
+                    Literal {
+                        kind: Str,
+                        symbol: "Hello, world!",
+                        suffix: None,
+                        span: #0 bytes(91..106),
+                    },
+                ],
+                span: #0 bytes(90..107),
+            },
+            Punct {
+                ch: ';',
+                spacing: Alone,
+                span: #0 bytes(107..108),
+            },
+        ],
+        span: #0 bytes(56..110),
+    },
+]
+```
+
+值得注意的是，输出上述结果后，还会输出
+
+```rust
+error[E0425]: cannot find value `b268tqwrsgfohi` in this scope
+ --> src/main.rs:5:5
+  |
+5 |     b268tqwrsgfohi;
+  |     ^^^^^^^^^^^^^^ not found in this scope
+```
+
+的错误信息，因为这段文字是明显的错误，应当是在语法分析的时候检查出来的，而如果在句子结尾处删去```;```,则会在最开始的时候出现这样的错误，
+
+```
+error: expected `;`, found `println`
+ --> src/main.rs:5:19
+  |
+5 |     b268tqwrsgfohi
+  |                   ^ help: add `;` here
+6 |     println!("Hello, world!");
+  |     ------- unexpected token
+```
+
+因此，我们可以知道，过程宏是在语法分析的时候被处理的，此时，过程宏会获取调用代码的AST,并进行相应的处理
+
 ## Rust 宏在实际项目中的使用分析
 
 本文选取多个流行的Rust仓库，分析其中Rust宏使用的模式和频率。
